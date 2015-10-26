@@ -16,7 +16,7 @@
     }
   ],
   "dependencies": {
-    "mbed-block": "~0.3.0",
+    "mbed-block": "^1.0.0",
     "core-util": "^1.0.0"
   },
   "testDependencies": {

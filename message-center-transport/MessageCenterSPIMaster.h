@@ -18,6 +18,7 @@
 #define __MESSAGE_CENTER_SPI_MASTER_H__
 
 #include "mbed-drivers/mbed.h"
+#include "core-util/SharedPointer.h"
 #include "mbed-block/BlockStatic.h"
 
 #if 0
@@ -38,19 +39,37 @@ public:
 
     bool sendTask(BlockStatic* block, void (*callback)(void))
     {
-        sendDoneCallback.attach(callback);
+        callbackSend.attach(callback);
 
         return internalSendTask(block);
     }
+
+    /*  Register receive callback. */
+    void onReceiveTask(void (*callback)(SharedPointer<Block> block))
+    {
+        callbackReceive.attach(callback);
+    }
+
+    template <typename T>
+    void onReceiveTask(T* object, void (T::*callback)(SharedPointer<Block> block))
+    {
+        callbackReceive.attach(object, callback);
+    }
+
 
 private:
 
     typedef enum {
         STATE_IDLE,
+        STATE_IDLE_WAIT,
         STATE_SEND_COMMAND,
         STATE_SEND_WAIT,
         STATE_SEND_MESSAGE,
-        STATE_SEND_DONE
+        STATE_SEND_DONE,
+        STATE_RECEIVE_WAIT_COMMAND,
+        STATE_RECEIVE_COMMAND,
+        STATE_RECEIVE_WAIT_MESSAGE,
+        STATE_RECEIVE_MESSAGE
     } state_t;
 
     state_t state;
@@ -63,6 +82,12 @@ private:
     void sendMessageTask(void);
     void sendMessageDoneTask(Buffer txBuffer, Buffer rxBuffer, int event);
 
+    void receiveCommandTask(void);
+    void receiveCommandDoneTask(Buffer txBuffer, Buffer rxBuffer, int event);
+
+    void receiveMessageTask(void);
+    void receiveMessageDoneTask(Buffer txBuffer, Buffer rxBuffer, int event);
+
     void printTask(const char*);
 
     void irqEnabledIRQ(void);
@@ -70,15 +95,21 @@ private:
     void irqDisabledIRQ(void);
     void irqDisabledTask(void);
 
+    void timeoutTask(void);
+
     SPI&            spi;
     DigitalOut      cs;
     InterruptIn     irq;
 
-    FunctionPointer0<void> sendDoneCallback;
+    FunctionPointer0<void>                          callbackSend;
+    FunctionPointer1<void, SharedPointer<Block> >   callbackReceive;
 
-    uint8_t cmdTxBuffer[4];
+    uint8_t cmdBuffer[4];
 
+    SharedPointer<Block> receiveBlock;
     BlockStatic* sendBlock;
+
+    minar::callback_handle_t timeoutHandle;
 };
 
 #endif // __MESSAGE_CENTER_SPI_MASTER_H__

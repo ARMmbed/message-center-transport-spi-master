@@ -31,26 +31,38 @@ const PinName SPI_MOSI = PD0;
 const PinName SPI_MISO = PD1;
 const PinName SPI_SCLK = PD2;
 const PinName SPI_SSEL = PD3;
+const PinName SPI_IRQ  = PD4;
+const PinName BUTTON1 = BTN0;
+const PinName BUTTON2 = BTN1;
+#elif defined(TARGET_LIKE_K64F)
+const PinName SPI_MOSI = YOTTA_CFG_HARDWARE_TEST_PINS_SPI_MOSI;
+const PinName SPI_MISO = YOTTA_CFG_HARDWARE_TEST_PINS_SPI_MISO;
+const PinName SPI_SCLK = YOTTA_CFG_HARDWARE_TEST_PINS_SPI_SCLK;
+const PinName SPI_SSEL = YOTTA_CFG_HARDWARE_TEST_PINS_SPI_SSEL;
+const PinName SPI_IRQ  = PTC4;
+const PinName BUTTON1 = SW2;
+const PinName BUTTON2 = SW3;
 #else
 const PinName SPI_MOSI = YOTTA_CFG_HARDWARE_TEST_PINS_SPI_MOSI;
 const PinName SPI_MISO = YOTTA_CFG_HARDWARE_TEST_PINS_SPI_MISO;
 const PinName SPI_SCLK = YOTTA_CFG_HARDWARE_TEST_PINS_SPI_SCLK;
 const PinName SPI_SSEL = YOTTA_CFG_HARDWARE_TEST_PINS_SPI_SSEL;
+const PinName SPI_IRQ  = YOTTA_CFG_HARDWARE_TEST_PINS_SPI_IRQ;
 #endif
 
 static SPI spi(SPI_MOSI, SPI_MISO, SPI_SCLK);
-static MessageCenterSPIMaster transport(spi, SPI_SSEL, PD4);
+static MessageCenterSPIMaster transport(spi, SPI_SSEL, SPI_IRQ);
 
 // enable buttons to initiate transfer
-static InterruptIn button1(BTN0);
-static InterruptIn button2(BTN1);
+static InterruptIn button1(BUTTON1);
+static InterruptIn button2(BUTTON2);
 
 static uint8_t buffer[100];
 static BlockStatic block(buffer, sizeof(buffer));
 
 void receivedBlock(SharedPointer<Block> block)
 {
-    printf("main:received: ");
+    printf("main:received: %p\r\n", &(block->at(0)));
     for (std::size_t idx = 0; idx < block->getLength(); idx++)
     {
         printf("%02X", block->at(idx));
@@ -63,13 +75,13 @@ void receivedBlock(SharedPointer<Block> block)
 /* Buttons                                                                   */
 /*****************************************************************************/
 
-uint32_t counter = 100;
+int32_t counter = 0;
 
 void sendDone()
 {
     printf("send done\r\n");
 
-    if (counter--)
+    if (--counter > 0)
     {
         transport.sendTask(&block, sendDone);
     }
@@ -84,7 +96,7 @@ void button1Task()
         block.at(idx) = idx;
     }
 
-    counter = 100;
+    counter = 1;
 
     transport.sendTask(&block, sendDone);
 }
@@ -110,7 +122,7 @@ void app_start(int, char *[])
     button1.fall(button1ISR);
     button2.fall(button2ISR);
 
-//    transport.onReceive(receivedBlock);
+    transport.onReceiveTask(receivedBlock);
 
     printf("SPI Master: %s %s\r\n", __DATE__, __TIME__);
 }
