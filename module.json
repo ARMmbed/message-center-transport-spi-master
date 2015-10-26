@@ -1,0 +1,25 @@
+{
+  "name": "message-center-transport-spi-master",
+  "version": "0.0.0",
+  "description": "SPI master transport layer for the Message Center.",
+  "keywords": [],
+  "author": "Marcus Chang <marcus.chang@arm.com>",
+  "repository": {
+    "url": "git@github.com:ARMmbed/message-center-transport-spi-master.git",
+    "type": "git"
+  },
+  "homepage": "https://github.com/ARMmbed/message-center-transport-spi-master",
+  "licenses": [
+    {
+      "url": "https://spdx.org/licenses/Apache-2.0",
+      "type": "Apache-2.0"
+    }
+  ],
+  "dependencies": {
+    "mbed-block": "~0.3.0",
+    "core-util": "^1.0.0"
+  },
+  "testDependencies": {
+    "mbed-drivers": "~0.11.0"
+  }
+}
