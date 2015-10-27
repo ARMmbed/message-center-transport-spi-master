@@ -16,6 +16,7 @@
     }
   ],
   "dependencies": {
+    "message-center-transport": "~0.1.0",
     "mbed-block": "^1.0.0",
     "core-util": "^1.0.0"
   },

@@ -60,9 +60,10 @@ static InterruptIn button2(BUTTON2);
 static uint8_t buffer[100];
 static BlockStatic block(buffer, sizeof(buffer));
 
-void receivedBlock(SharedPointer<Block> block)
+void receivedBlock(uint16_t port, SharedPointer<Block> block)
 {
     printf("main:received: %p\r\n", &(block->at(0)));
+    printf("%u : ", port);
     for (std::size_t idx = 0; idx < block->getLength(); idx++)
     {
         printf("%02X", block->at(idx));
@@ -98,7 +99,7 @@ void button1Task()
 
     counter = 1;
 
-    transport.sendTask(&block, sendDone);
+    transport.sendTask(1234, &block, sendDone);
 }
 
 void button1ISR()

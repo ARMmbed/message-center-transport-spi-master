@@ -24,12 +24,12 @@
 
 
 MessageCenterSPIMaster::MessageCenterSPIMaster(SPI& _spi, PinName _cs, PinName _irq)
-    :   state(STATE_IDLE),
+    :   MessageCenterTransport(),
+        state(STATE_IDLE),
         spi(_spi),
         cs(_cs),
         irq(_irq),
-        callbackSend(),
-        callbackReceive(),
+        callbackPort(0),
         timeoutHandle(NULL)
 {
     spi.format(8, 0, SPI_MSB);
@@ -134,7 +134,7 @@ void MessageCenterSPIMaster::irqDisabledTask()
 /* Send                                                                      */
 /*****************************************************************************/
 
-bool MessageCenterSPIMaster::internalSendTask(BlockStatic* block)
+bool MessageCenterSPIMaster::internalSendTask(uint16_t port, BlockStatic* block)
 {
     bool result = false;
 
@@ -150,9 +150,16 @@ bool MessageCenterSPIMaster::internalSendTask(BlockStatic* block)
                 // chip select ASAP to prevent slave from sending
                 cs = 0;
 
-                state = STATE_SEND_COMMAND;
+                // If chip select was successful, IRQ is still high, proceed.
+                // If not, don't change state, task for reading slave will be posted
+                // when this critical section ends.
+                // Let CS remain low in order not to interfere with the transfer.
+                if (irq == 1)
+                {
+                    state = STATE_SEND_COMMAND;
 
-                result = true;
+                    result = true;
+                }
             }
         }
         // end critical section
@@ -163,8 +170,8 @@ bool MessageCenterSPIMaster::internalSendTask(BlockStatic* block)
 
             sendBlock = block;
 
-            FunctionPointer1<void, uint32_t> fp(this, &MessageCenterSPIMaster::sendCommandTask);
-            minar::Scheduler::postCallback(fp.bind(length));
+            FunctionPointer2<void, uint16_t, uint32_t> fp(this, &MessageCenterSPIMaster::sendCommandTask);
+            minar::Scheduler::postCallback(fp.bind(port, length));
         }
     }
 
@@ -172,18 +179,21 @@ bool MessageCenterSPIMaster::internalSendTask(BlockStatic* block)
 }
 
 
-void MessageCenterSPIMaster::sendCommandTask(uint32_t length)
+void MessageCenterSPIMaster::sendCommandTask(uint16_t port, uint32_t length)
 {
     cmdBuffer[0] = length;
     cmdBuffer[1] = length >> 8;
     cmdBuffer[2] = length >> 16;
     cmdBuffer[3] = length >> 24;
 
+    cmdBuffer[4] = port;
+    cmdBuffer[5] = port >> 8;
+
     SPI::event_callback_t onFinish(this, &MessageCenterSPIMaster::sendCommandDoneTask);
 
     // send buffer over SPI
     spi.transfer()
-        .tx(cmdBuffer, 4)
+        .tx(cmdBuffer, 6)
         .callback(onFinish, SPI_EVENT_ALL)
         .apply();
 }
@@ -239,7 +249,7 @@ void MessageCenterSPIMaster::receiveCommandTask()
 
     // send buffer over SPI
     spi.transfer()
-        .rx(cmdBuffer, 4)
+        .rx(cmdBuffer, 6)
         .callback(onFinish, SPI_EVENT_ALL)
         .apply();
 }
@@ -264,6 +274,9 @@ void MessageCenterSPIMaster::receiveMessageTask()
     length = (length << 8) | cmdBuffer[2];
     length = (length << 8) | cmdBuffer[1];
     length = (length << 8) | cmdBuffer[0];
+
+    callbackPort = cmdBuffer[5];
+    callbackPort = (callbackPort << 8) | cmdBuffer[4];
 
     // allocate buffer
     uint8_t* buffer = (uint8_t*) malloc(length);
@@ -298,7 +311,7 @@ void MessageCenterSPIMaster::receiveMessageDoneTask(Buffer txBuffer, Buffer rxBu
     // post callback to receive handler
     if (callbackReceive)
     {
-        minar::Scheduler::postCallback(callbackReceive.bind(receiveBlock));
+        minar::Scheduler::postCallback(callbackReceive.bind(callbackPort, receiveBlock));
     }
 
     // clear reference to shared block

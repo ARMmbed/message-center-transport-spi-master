@@ -17,9 +17,12 @@
 #ifndef __MESSAGE_CENTER_SPI_MASTER_H__
 #define __MESSAGE_CENTER_SPI_MASTER_H__
 
+#include "message-center-transport/MessageCenterTransport.h"
+
 #include "mbed-drivers/mbed.h"
 #include "core-util/SharedPointer.h"
 #include "mbed-block/BlockStatic.h"
+
 
 #if 0
 #if defined(TARGET_LIKE_STK3700)
@@ -31,30 +34,10 @@
 
 using namespace mbed::util;
 
-class MessageCenterSPIMaster
+class MessageCenterSPIMaster : public MessageCenterTransport
 {
 public:
     MessageCenterSPIMaster(SPI& _spi, PinName _cs, PinName _irq);
-
-
-    bool sendTask(BlockStatic* block, void (*callback)(void))
-    {
-        callbackSend.attach(callback);
-
-        return internalSendTask(block);
-    }
-
-    /*  Register receive callback. */
-    void onReceiveTask(void (*callback)(SharedPointer<Block> block))
-    {
-        callbackReceive.attach(callback);
-    }
-
-    template <typename T>
-    void onReceiveTask(T* object, void (T::*callback)(SharedPointer<Block> block))
-    {
-        callbackReceive.attach(object, callback);
-    }
 
 
 private:
@@ -74,9 +57,9 @@ private:
 
     state_t state;
 
-    bool internalSendTask(BlockStatic* block);
+    virtual bool internalSendTask(uint16_t port, BlockStatic* block);
 
-    void sendCommandTask(uint32_t length);
+    void sendCommandTask(uint16_t port, uint32_t length);
     void sendCommandDoneTask(Buffer txBuffer, Buffer rxBuffer, int event);
 
     void sendMessageTask(void);
@@ -101,10 +84,8 @@ private:
     DigitalOut      cs;
     InterruptIn     irq;
 
-    FunctionPointer0<void>                          callbackSend;
-    FunctionPointer1<void, SharedPointer<Block> >   callbackReceive;
-
-    uint8_t cmdBuffer[4];
+    uint8_t cmdBuffer[6];
+    uint16_t callbackPort;
 
     SharedPointer<Block> receiveBlock;
     BlockStatic* sendBlock;
