@@ -57,7 +57,7 @@ private:
 
     state_t state;
 
-    virtual bool internalSendTask(uint16_t port, BlockStatic* block);
+    virtual bool internalSendTask(uint16_t port, BlockStatic& block);
 
     void sendCommandTask(uint16_t port, uint32_t length);
     void sendCommandDoneTask(Buffer txBuffer, Buffer rxBuffer, int event);
@@ -87,8 +87,8 @@ private:
     uint8_t cmdBuffer[6];
     uint16_t callbackPort;
 
-    SharedPointer<Block> receiveBlock;
-    BlockStatic* sendBlock;
+    SharedPointer<BlockStatic> receiveBlock;
+    BlockStatic sendBlock;
 
     minar::callback_handle_t timeoutHandle;
 };

@@ -134,45 +134,42 @@ void MessageCenterSPIMaster::irqDisabledTask()
 /* Send                                                                      */
 /*****************************************************************************/
 
-bool MessageCenterSPIMaster::internalSendTask(uint16_t port, BlockStatic* block)
+bool MessageCenterSPIMaster::internalSendTask(uint16_t port, BlockStatic& block)
 {
     bool result = false;
 
-    if (block)
+    // begin critical section
     {
-        // begin critical section
+        CriticalSectionLock lock;
+
+        if ((state == STATE_IDLE) &&
+            (irq == 1))
         {
-            CriticalSectionLock lock;
+            // chip select ASAP to prevent slave from sending
+            cs = 0;
 
-            if ((state == STATE_IDLE) &&
-                (irq == 1))
+            // If chip select was successful, IRQ is still high, proceed.
+            // If not, don't change state, task for reading slave will be posted
+            // when this critical section ends.
+            // Let CS remain low in order not to interfere with the transfer.
+            if (irq == 1)
             {
-                // chip select ASAP to prevent slave from sending
-                cs = 0;
+                state = STATE_SEND_COMMAND;
 
-                // If chip select was successful, IRQ is still high, proceed.
-                // If not, don't change state, task for reading slave will be posted
-                // when this critical section ends.
-                // Let CS remain low in order not to interfere with the transfer.
-                if (irq == 1)
-                {
-                    state = STATE_SEND_COMMAND;
-
-                    result = true;
-                }
+                result = true;
             }
         }
-        // end critical section
+    }
+    // end critical section
 
-        if (result)
-        {
-            uint32_t length = block->getLength();
+    if (result)
+    {
+        sendBlock = block;
 
-            sendBlock = block;
+        uint32_t length = sendBlock.getLength();
 
-            FunctionPointer2<void, uint16_t, uint32_t> fp(this, &MessageCenterSPIMaster::sendCommandTask);
-            minar::Scheduler::postCallback(fp.bind(port, length));
-        }
+        FunctionPointer2<void, uint16_t, uint32_t> fp(this, &MessageCenterSPIMaster::sendCommandTask);
+        minar::Scheduler::postCallback(fp.bind(port, length));
     }
 
     return result;
@@ -219,7 +216,7 @@ void MessageCenterSPIMaster::sendMessageTask()
 
     // send buffer over SPI
     spi.transfer()
-        .tx(sendBlock->getData(), sendBlock->getLength())
+        .tx(sendBlock.getData(), sendBlock.getLength())
         .callback(onFinish, SPI_EVENT_ALL)
         .apply();
 }
@@ -282,7 +279,7 @@ void MessageCenterSPIMaster::receiveMessageTask()
     uint8_t* buffer = (uint8_t*) malloc(length);
 
     // store shared pointer
-    receiveBlock = SharedPointer<Block>(new BlockDynamic(buffer, length));
+    receiveBlock = SharedPointer<BlockStatic>(new BlockDynamic(buffer, length));
 
     // chip select
     cs = 0;
@@ -315,7 +312,7 @@ void MessageCenterSPIMaster::receiveMessageDoneTask(Buffer txBuffer, Buffer rxBu
     }
 
     // clear reference to shared block
-    receiveBlock = SharedPointer<Block>();
+    receiveBlock = SharedPointer<BlockStatic>();
 }
 
 /*****************************************************************************/
