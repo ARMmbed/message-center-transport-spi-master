@@ -91,6 +91,7 @@ private:
     BlockStatic sendBlock;
 
     minar::callback_handle_t timeoutHandle;
+    uint32_t irqDelay;
 };
 
 #endif // __MESSAGE_CENTER_SPI_MASTER_H__

@@ -30,7 +30,8 @@ MessageCenterSPIMaster::MessageCenterSPIMaster(SPI& _spi, PinName _cs, PinName _
         cs(_cs),
         irq(_irq),
         callbackPort(0),
-        timeoutHandle(NULL)
+        timeoutHandle(NULL),
+        irqDelay(0)
 {
     spi.format(8, 0, SPI_MSB);
     spi.frequency(1000000);
@@ -56,25 +57,20 @@ void MessageCenterSPIMaster::irqEnabledIRQ()
 
 void MessageCenterSPIMaster::irqEnabledTask()
 {
-    // Slave responded to send command, send message
-    if (state == STATE_SEND_WAIT)
-    {
-        state = STATE_SEND_MESSAGE;
-
-        sendMessageTask();
-    }
     // Slave acquired SPI, expect command shortly
-    else if (state == STATE_IDLE)
+    if (state == STATE_IDLE)
     {
         // change state, this prevents the Master from sending at the same time
         state = STATE_RECEIVE_WAIT_COMMAND;
 
-        // Consistency check
-        // if the Slave reboots for some reason, a small pulse might be generated
-        // on the IRQ line. Post a callback to check whether this is the case and
+        // Consistency check. If the Slave reboots for some reason, a small pulse
+        //  might be generated on the IRQ line.
+        irqDelay = minar::Scheduler::getTime();
+
+        // Post a callback to check whether this is the case and
         // reset the state to idle if a transfer hasn't commenced.
         timeoutHandle = minar::Scheduler::postCallback(this, &MessageCenterSPIMaster::timeoutTask)
-                            .delay(minar::milliseconds(1000))
+                            .delay(minar::milliseconds(MessageCenterTransport::TimeoutInMs))
                             .getHandle();
 
     }
@@ -85,6 +81,19 @@ void MessageCenterSPIMaster::irqEnabledTask()
 
         receiveMessageTask();
     }
+    // Slave responded to send command, send message
+    else if (state == STATE_SEND_WAIT)
+    {
+        state = STATE_SEND_MESSAGE;
+
+        sendMessageTask();
+    }
+    else
+    {
+        // unknown state revert to idle
+        state = STATE_IDLE;
+    }
+
 }
 
 void MessageCenterSPIMaster::irqDisabledIRQ()
@@ -97,8 +106,39 @@ void MessageCenterSPIMaster::irqDisabledIRQ()
 
 void MessageCenterSPIMaster::irqDisabledTask()
 {
+    // Slave signals a command is ready to be read
+    if (state == STATE_RECEIVE_WAIT_COMMAND)
+    {
+        uint32_t now = minar::Scheduler::getTime();
+
+        // check if irq width is wide enough to be genuine transfer
+        if (minar::ticks(now - irqDelay) > MessageCenterTransport::MinimumIRQDelay)
+        {
+            state = STATE_RECEIVE_COMMAND;
+
+            receiveCommandTask();
+        }
+        // if not, reset state
+        else
+        {
+            state = STATE_IDLE;
+
+            // cancel timeout task
+            minar::Scheduler::cancelCallback(timeoutHandle);
+            timeoutHandle = NULL;
+        }
+    }
+    // Slave signals it is ready for next round
+    else if (state == STATE_IDLE_WAIT)
+    {
+        state = STATE_IDLE;
+
+        // cancel timeout task
+        minar::Scheduler::cancelCallback(timeoutHandle);
+        timeoutHandle = NULL;
+    }
     // Slave signals it is ready for next round of communication
-    if (state == STATE_SEND_DONE)
+    else if (state == STATE_SEND_DONE)
     {
         state = STATE_IDLE;
 
@@ -106,22 +146,6 @@ void MessageCenterSPIMaster::irqDisabledTask()
         {
             minar::Scheduler::postCallback(callbackSend);
         }
-    }
-    // Slave signals a command is ready to be read
-    else if (state == STATE_RECEIVE_WAIT_COMMAND)
-    {
-        state = STATE_RECEIVE_COMMAND;
-
-        // cancel timeout task since this was a genuine signal from the Slave
-        minar::Scheduler::cancelCallback(timeoutHandle);
-        timeoutHandle = NULL;
-
-        receiveCommandTask();
-    }
-    // Slave signals it is ready for next round
-    else if (state == STATE_IDLE_WAIT)
-    {
-        state = STATE_IDLE;
     }
     // unknown state, reset to known state
     else
