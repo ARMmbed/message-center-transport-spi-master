@@ -1,6 +1,6 @@
 {
   "name": "message-center-transport-spi-master",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "SPI master transport layer for the Message Center.",
   "keywords": [],
   "author": "Marcus Chang <marcus.chang@arm.com>",
