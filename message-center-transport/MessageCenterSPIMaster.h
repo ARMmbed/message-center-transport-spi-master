@@ -59,6 +59,8 @@ private:
 
     virtual bool internalSendTask(uint16_t port, BlockStatic& block);
 
+    void init(void);
+
     void sendCommandTask(uint16_t port, uint32_t length);
     void sendCommandDoneTask(Buffer txBuffer, Buffer rxBuffer, int event);
 

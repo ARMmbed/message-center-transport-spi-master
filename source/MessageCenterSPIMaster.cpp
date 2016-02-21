@@ -33,15 +33,21 @@ MessageCenterSPIMaster::MessageCenterSPIMaster(SPI& _spi, PinName _cs, PinName _
         timeoutHandle(NULL),
         irqDelay(0)
 {
-    spi.format(8, 0, SPI_MSB);
-    spi.frequency(1000000);
-    spi.set_dma_usage(DMA_USAGE_OPPORTUNISTIC);
+    minar::Scheduler::postCallback(this, &MessageCenterSPIMaster::init)
+        .tolerance(1);
 
     cs = 1;
 
     irq.mode(PullUp);
     irq.fall(this, &MessageCenterSPIMaster::irqEnabledIRQ);
     irq.rise(this, &MessageCenterSPIMaster::irqDisabledIRQ);
+}
+
+void MessageCenterSPIMaster::init()
+{
+    spi.format(8, 0, SPI_MSB);
+    spi.frequency(1000000);
+    spi.set_dma_usage(DMA_USAGE_OPPORTUNISTIC);
 }
 
 /*****************************************************************************/
