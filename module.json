@@ -16,11 +16,8 @@
     }
   ],
   "dependencies": {
-    "message-center-transport": "^2.0.0",
-    "mbed-block": "^1.0.0",
-    "core-util": "^1.0.0"
-  },
-  "testDependencies": {
-    "mbed-drivers": "~0.11.0"
+    "message-center-transport": "*",
+    "mbed-block": "*",
+    "mbed-drivers": "*"
   }
 }
